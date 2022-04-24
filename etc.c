@@ -20,15 +20,16 @@
 #define EXTRA_DATA_RETRANSMISSIONS 2
 #define EXTRA_COMMAND_RETRANSMISSIONS 2
 #define LIMIT 4
-#define DATA_RETRANSMIT_OFFSET (random_rand() % 310)
-#define DATA_SENSOR_OFFSET (random_rand() % 100)
-#define ACTUATION_RETRANSMIT_OFFSET (random_rand() % 420)
-#define ACTUATION_MULTIPLE_SEND_OFFSET (random_rand() % 200)
+#define DATA_RETRANSMIT_OFFSET (random_rand() % (CLOCK_SECOND) + (CLOCK_SECOND/2))
+#define DATA_SENSOR_OFFSET (random_rand() % (CLOCK_SECOND / 10))
+#define ACTUATION_RETRANSMIT_OFFSET ((CLOCK_SECOND/2) + random_rand() % (CLOCK_SECOND / 3))
+#define ACTUATION_MULTIPLE_SEND_OFFSET (random_rand() % (CLOCK_SECOND / 4))
 #define ACTUATION_OPPORTUNISTIC_OFFSET (4 * CLOCK_SECOND) 
+#define COLLECT_TRIGGER (random_rand() % (2*CLOCK_SECOND) + (CLOCK_SECOND))
 /*---------------------------------------------------------------------------*/
 /* Topology information (parents, metrics...) */
 /* ... */
-void send_beacon(struct etc_conn* conn);
+void send_beacon(struct etc_conn* conn); 
 void send_event(void* ptr);
 struct sensor_data sensor_event_data = {.value = 0, .threshold = 0};
 /*---------------------------------------------------------------------------*/
@@ -64,6 +65,7 @@ struct collect_msg_t {
 
 struct command_msg_t last_actuation_command;
 struct command_msg_t opportunistic_actuation_command;
+struct command_msg_t last_opportunistic_actuation_command;
 
 struct command_msg_list_t {
   struct command_msg_list_t* next;
@@ -119,6 +121,7 @@ static struct ctimer actuation_retransmission_timer;
 static struct ctimer data_transmission_timer;
 static struct ctimer data_retransmission_timer;
 static struct ctimer actuation_opp_suppress_timer;
+
 
 /* Utils */
 
@@ -388,13 +391,18 @@ tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
        * did not apply, check if node has a second parent. In negative
        * case set it to the proposed candidate on the only basis of RSSI.
        */
-      if(conn->node_role == NODE_ROLE_SENSOR_ACTUATOR){
-        if(rssi > conn->tree_info.rssi[1]){
+      
+        if(linkaddr_cmp(&conn->tree_info.parents[1], &linkaddr_null)){
+          parent_to_update = 1;
+        }else if(rssi > conn->tree_info.rssi[1]){
           parent_to_update = 1;
         }
+      
+
+      if(parent_to_update == -1){
+        printf("Tree building: Nothing to do\n");
+        return; // Ignore beacon. Parent_to_update is -1.
       }
-      printf("Tree building: Nothing to do\n");
-      return; // Ignore beacon. Parent_to_update is -1.
     }
 
     /* In case the new beacon parent is better than the saved best candidate, the old best becomes
@@ -531,9 +539,9 @@ void event_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender){
 
   /* Sensors: scheduling sending of COLLECT message */
   if(conn->node_role == NODE_ROLE_SENSOR_ACTUATOR){
-    clock_time_t delay = ((clock_time_t)linkaddr_node_addr.u16 + random_rand()) % 1200;
-    printf("Delay %u\n", delay);
-    ctimer_set(&conn->datacollection_timer, delay, data_collection_trigger, conn);
+    // clock_time_t delay = (clock_time_t)(linkaddr_node_addr.u16 + random_rand() % 1200) ;
+    printf("Delay %lu\n", COLLECT_TRIGGER);
+    ctimer_set(&conn->datacollection_timer, COLLECT_TRIGGER , data_collection_trigger, conn);
   }
 
   /* Enable timers:
@@ -619,6 +627,7 @@ void data_collection_send(void* ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr;
   struct collect_msg_list_t* head;
   int ret;
+  bool try_second_parent = false;
 
   /* Pick a collect message to be sent */
   head = list_head(collect_to_send);
@@ -635,32 +644,43 @@ void data_collection_send(void* ptr){
   packetbuf_clear();
   packetbuf_copyfrom(&head->collect_message, sizeof(head->collect_message));
 
-  /* Has the collect message been already retransmitted? */
+  /* Has the collect message been already retransmitted by this node? */
   if(head->collect_message.retransmitted > 0 && head->collect_message.retransmitted < MAX_DATA_RETRANSMISSIONS){
     printf("Collection RESEND [%02x:%02x - %d] of [%02x:%02x]\n", head->collect_message.event_source.u8[0], head->collect_message.event_source.u8[1], head->collect_message.event_seqn, head->collect_message.s_data.sensor_addr.u8[0], head->collect_message.s_data.sensor_addr.u8[1]);
+    if(head->collect_message.retransmitted >= (MAX_DATA_RETRANSMISSIONS/2)){
+      try_second_parent = true;
+    }
   }else if(head->collect_message.retransmitted == MAX_DATA_RETRANSMISSIONS){
     /* Max number of retransmissions reached */
     printf("Max retransmissions\n");
-    // TODO remove the packet or reset
-    return;
+    list_pop(collect_to_send);
+    memb_free(&collect_mem, head);
   }
 
-  /* Send the collect message to the node's parent in unicast */
-  ret = runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[0], MAX_DATA_RETRANSMISSIONS); 
-  if (ret == 0){
-    ret = runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[1], MAX_DATA_RETRANSMISSIONS); 
-    if(ret == 0){
-      /* Both send couldn't start. Scheduling retransmission */
-      printf("Data collection failed to start from this node. Other attempts later\n");
-      ctimer_set(&data_retransmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_resend, conn);
-      return;
+  if(!try_second_parent){
+    /* Send the collect message to the node's parent in unicast.
+     * Both parents could be employed to perform the send.
+     */
+    ret = runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[0], MAX_DATA_RETRANSMISSIONS); 
+    if (ret == 0){
+      ret = runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[1], MAX_DATA_RETRANSMISSIONS); 
+      if(ret == 0){
+        /* Both send couldn't start. Scheduling retransmission */
+        printf("Data collection failed to start from this node. Other attempts later\n");
+        ctimer_set(&data_retransmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_resend, conn);
+        return;
+      }else{
+        printf("Collection forwoard: sensor sending [%02x:%02x - %d] to second parent [%02x:%2x]\n", conn->event_source.u8[0], conn->event_source.u8[1], conn->event_seqn, conn->tree_info.parents[1].u8[0], conn->tree_info.parents[1].u8[1]);
+      } 
     }else{
-      printf("Collection forwoard: sensor sending [%02x:%02x - %d] to second parent [%02x:%2x]\n", conn->event_source.u8[0], conn->event_source.u8[1], conn->event_seqn, conn->tree_info.parents[1].u8[0], conn->tree_info.parents[1].u8[1]);
-    } 
+      printf("Collection forwoard: sensor sending [%02x:%02x - %d] to first parent [%02x:%02x]\n", conn->event_source.u8[0], conn->event_source.u8[1], conn->event_seqn, conn->tree_info.parents[0].u8[0], conn->tree_info.parents[0].u8[1]);
+    }
   }else{
-    printf("Collection forwoard: sensor sending [%02x:%02x - %d] to first parent [%02x:%02x]\n", conn->event_source.u8[0], conn->event_source.u8[1], conn->event_seqn, conn->tree_info.parents[0].u8[0], conn->tree_info.parents[0].u8[1]);
+    /* The node already retransmitted some times. Switch to use the second parent only */
+    head->collect_message.retransmitted++;
+    runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[1], MAX_DATA_RETRANSMISSIONS);
+    printf("Collection forwoard: sensor sending [%02x:%02x - %d] to second parent [%02x:%2x]\n", conn->event_source.u8[0], conn->event_source.u8[1], conn->event_seqn, conn->tree_info.parents[1].u8[0], conn->tree_info.parents[1].u8[1]); 
   }
-  
   /* Recursive call in case there are still messages to be delivered */
   if(list_length(collect_to_send) + 1 > 2){
     ctimer_set(&data_transmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_send, conn);
@@ -856,6 +876,8 @@ void send_actuation_command(void* ptr){
   }else if(head->actuation_command.retransmitted == MAX_COMMAND_RETRANSMISSIONS){
     /* Max retransmission reached */
     printf("Max retransmission of command message\n");
+    list_pop(commands_to_send);
+    memb_free(&actuation_mem, head);
   }
 
   ret = runicast_send(&conn->actuation_conn, &downward_table_destinations[idx], MAX_COMMAND_RETRANSMISSIONS); 
@@ -907,7 +929,7 @@ void actuation_command_uc_recv(struct runicast_conn *c, const linkaddr_t *from, 
    * Node could have already succesfully sent/received this actuation command but it may
    * be triggered again because the sender did not receive ack.
    */
-  if(last_actuation_command.event_seqn != command_msg.event_seqn || !linkaddr_cmp(&last_actuation_command.event_source, &command_msg.event_source)){
+  if(last_actuation_command.event_seqn != command_msg.event_seqn || !linkaddr_cmp(&last_actuation_command.event_source, &command_msg.event_source) || (linkaddr_cmp(&last_actuation_command.dest, &command_msg.dest))){
     /* Check if the node is the destination */
     if(linkaddr_cmp(&command_msg.dest, &linkaddr_node_addr) == 0){
       
@@ -952,19 +974,9 @@ void actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
     conn = (struct etc_conn*)(((uint8_t*)c) - 
       offsetof(struct etc_conn, actuation_opportunistic_conn));
 
-    /* Check if node should suppress the resend */
-    if(conn->suppress_opportunistic){
-      printf("Suppress opportunistic resend of commands\n");
-      return;
-    }
-
-    /* Enable suppressing of commands forward */
-    ctimer_set(&actuation_opp_suppress_timer, ACTUATION_OPPORTUNISTIC_OFFSET, opportunistic_timer_cb, conn);
-    conn->suppress_opportunistic = true;
-
     /* Check if the received message looks legitimate */
     if (packetbuf_datalen() < sizeof(struct command_msg_t)) {
-      printf("--COMMAND: too short packet %d\n", packetbuf_datalen());
+      printf("--COMMAND opportunistic: too short packet %d\n", packetbuf_datalen());
       return;
     }
     memcpy(&command_msg, packetbuf_dataptr(), sizeof(command_msg));
@@ -972,16 +984,39 @@ void actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
     /* Print debug */
     printf("--COMMAND opportunistic: reception of command for event [%02x:%02x - %d] to [%02x:%02x]\n", command_msg.event_source.u8[0], command_msg.event_source.u8[1], command_msg.event_seqn ,command_msg.dest.u8[0], command_msg.dest.u8[1]);
 
+    /* Has the destination been reached? */
     if(linkaddr_cmp(&command_msg.dest, &linkaddr_node_addr) == 0){
       /* Node is not the destination of the command, forwarding */
+
+      /* Check for suppression of commands */
+      if(conn->suppress_opportunistic){
+        printf("Suppress opportunistic resend of commands\n");
+        return;
+      }
+
+      /* Enable suppressing of commands */
+      ctimer_set(&actuation_opp_suppress_timer, ACTUATION_OPPORTUNISTIC_OFFSET, opportunistic_timer_cb, conn);
+      conn->suppress_opportunistic = true;
+
+      /* Scheduling the send */
       memcpy(&opportunistic_actuation_command, packetbuf_dataptr(), sizeof(opportunistic_actuation_command));
       ctimer_set(&conn->actuation_opp_send_timer, ACTUATION_MULTIPLE_SEND_OFFSET, send_actuation_opportunistic, conn);
-      return;
     }else{
+      
+      /* Is this event already managed? Simple duplicate filter */
+      if((last_opportunistic_actuation_command.event_seqn == command_msg.event_seqn) && (linkaddr_cmp(&last_opportunistic_actuation_command.event_source, &command_msg.event_source))
+         && (last_opportunistic_actuation_command.command == command_msg.command)){
+            printf("--COMMAND opportunistic: node already successfully managed [%02x:%02x - %d - CMD: [%d]]. Dropping...\n", command_msg.event_source.u8[0], command_msg.event_source.u8[1], command_msg.event_seqn, command_msg.command);
+            return;
+         }
+
       printf("--COMMAND opporunistic: sensor [%02x:%02x] reached\n", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1]);
       conn->callbacks->com_cb(&command_msg.event_source, command_msg.event_seqn, command_msg.command, command_msg.treshold);
-      return;
+
+      /* Saving this command message as the last managed by the sensor */
+      memcpy(&last_opportunistic_actuation_command, &command_msg, sizeof(command_msg));
     }
+
 }
 
 /**
