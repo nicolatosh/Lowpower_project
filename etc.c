@@ -929,7 +929,7 @@ void actuation_command_uc_recv(struct runicast_conn *c, const linkaddr_t *from, 
    * Node could have already succesfully sent/received this actuation command but it may
    * be triggered again because the sender did not receive ack.
    */
-  if(last_actuation_command.event_seqn != command_msg.event_seqn || !linkaddr_cmp(&last_actuation_command.event_source, &command_msg.event_source) || (linkaddr_cmp(&last_actuation_command.dest, &command_msg.dest))){
+  if(last_actuation_command.event_seqn != command_msg.event_seqn || !linkaddr_cmp(&last_actuation_command.event_source, &command_msg.event_source) || !(linkaddr_cmp(&last_actuation_command.dest, &command_msg.dest))){
     /* Check if the node is the destination */
     if(linkaddr_cmp(&command_msg.dest, &linkaddr_node_addr) == 0){
       
