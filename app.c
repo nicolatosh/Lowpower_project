@@ -22,13 +22,13 @@
 #include "simple-energest.h"
 /*---------------------------------------------------------------------------*/
 #define ETC_FIRST_CHANNEL           (0xAA)
-#define CONTROLLER_COLLECT_WAIT     (CLOCK_SECOND * 12)
+#define CONTROLLER_COLLECT_WAIT     (CLOCK_SECOND * 10)
 
 /* You can change the values hereafter to increase / decrease the rate
  * of event detection of the system. In the final report, please REMEMBER to
  * mention how you defined such variables for each experiment! */
 #define SENSOR_UPDATE_INTERVAL      (CLOCK_SECOND * 7)
-#define SENSOR_UPDATE_INCREMENT     (random_rand() % 300)
+#define SENSOR_UPDATE_INCREMENT     (random_rand() % 300) 
 #define SENSOR_STARTING_VALUE_STEP  (1000)
 #define CONTROLLER_MAX_DIFF         (10000)
 #define CONTROLLER_MAX_THRESHOLD    (50000)

@@ -20,18 +20,20 @@
 #define EXTRA_DATA_RETRANSMISSIONS 2
 #define EXTRA_COMMAND_RETRANSMISSIONS 2
 #define LIMIT 4
-#define DATA_RETRANSMIT_OFFSET (random_rand() % (CLOCK_SECOND) + (CLOCK_SECOND/2))
-#define DATA_SENSOR_OFFSET (random_rand() % (CLOCK_SECOND / 10))
-#define ACTUATION_RETRANSMIT_OFFSET ((CLOCK_SECOND/2) + random_rand() % (CLOCK_SECOND / 3))
-#define ACTUATION_MULTIPLE_SEND_OFFSET (random_rand() % (CLOCK_SECOND / 4))
+#define DATA_RETRANSMIT_OFFSET (random_rand() % 310)
+#define DATA_TRANSMIT_OFFSET (CLOCK_SECOND/2) 
+#define DATA_SENSOR_OFFSET (random_rand() % (CLOCK_SECOND))
+#define ACTUATION_RETRANSMIT_OFFSET (random_rand() % 420)
+#define ACTUATION_MULTIPLE_SEND_OFFSET (random_rand() % 200)
 #define ACTUATION_OPPORTUNISTIC_OFFSET (4 * CLOCK_SECOND) 
-#define COLLECT_TRIGGER (random_rand() % (2*CLOCK_SECOND) + (CLOCK_SECOND))
+#define COLLECT_TRIGGER (random_rand() % (CLOCK_SECOND) + (CLOCK_SECOND/2))
 /*---------------------------------------------------------------------------*/
 /* Topology information (parents, metrics...) */
 /* ... */
 void send_beacon(struct etc_conn* conn); 
 void send_event(void* ptr);
 struct sensor_data sensor_event_data = {.value = 0, .threshold = 0};
+
 /*---------------------------------------------------------------------------*/
 /* Forwarders (routes to sensors/actuators) */
 /* ... */
@@ -116,11 +118,11 @@ static void actuation_resend(void *ptr);
 
 /* Timers */
 
-static struct ctimer actuation_multiple_send_timer;
-static struct ctimer actuation_retransmission_timer;
-static struct ctimer data_transmission_timer;
-static struct ctimer data_retransmission_timer;
-static struct ctimer actuation_opp_suppress_timer;
+struct ctimer actuation_multiple_send_timer;
+struct ctimer actuation_retransmission_timer;
+struct ctimer data_transmission_timer;
+struct ctimer data_retransmission_timer;
+struct ctimer actuation_opp_suppress_timer;
 
 
 /* Utils */
@@ -626,7 +628,7 @@ void data_collection_trigger(void* ptr)
 void data_collection_send(void* ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr;
   struct collect_msg_list_t* head;
-  int ret;
+  int ret, ret2;
   bool try_second_parent = false;
 
   /* Pick a collect message to be sent */
@@ -650,7 +652,7 @@ void data_collection_send(void* ptr){
     if(head->collect_message.retransmitted >= (MAX_DATA_RETRANSMISSIONS/2)){
       try_second_parent = true;
     }
-  }else if(head->collect_message.retransmitted == MAX_DATA_RETRANSMISSIONS){
+  }else if(head->collect_message.retransmitted >= MAX_DATA_RETRANSMISSIONS){
     /* Max number of retransmissions reached */
     printf("Max retransmissions\n");
     list_pop(collect_to_send);
@@ -670,21 +672,24 @@ void data_collection_send(void* ptr){
         ctimer_set(&data_retransmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_resend, conn);
         return;
       }else{
-        printf("Collection forwoard: sensor sending [%02x:%02x - %d] to second parent [%02x:%2x]\n", conn->event_source.u8[0], conn->event_source.u8[1], conn->event_seqn, conn->tree_info.parents[1].u8[0], conn->tree_info.parents[1].u8[1]);
+        printf("Collection forwoard: sensor sending [%02x:%02x - %d] of [%02x:%02x] to second parent [%02x:%2x]\n", head->collect_message.event_source.u8[0], head->collect_message.event_source.u8[1], head->collect_message.event_seqn, head->collect_message.s_data.sensor_addr.u8[0], head->collect_message.s_data.sensor_addr.u8[1], conn->tree_info.parents[1].u8[0], conn->tree_info.parents[1].u8[1]);
       } 
     }else{
-      printf("Collection forwoard: sensor sending [%02x:%02x - %d] to first parent [%02x:%02x]\n", conn->event_source.u8[0], conn->event_source.u8[1], conn->event_seqn, conn->tree_info.parents[0].u8[0], conn->tree_info.parents[0].u8[1]);
+      printf("Collection forwoard: sensor sending [%02x:%02x - %d] of [%02x:%02x] to first parent [%02x:%02x]\n", head->collect_message.event_source.u8[0], head->collect_message.event_source.u8[1], head->collect_message.event_seqn, head->collect_message.s_data.sensor_addr.u8[0], head->collect_message.s_data.sensor_addr.u8[1], conn->tree_info.parents[0].u8[0], conn->tree_info.parents[0].u8[1]);
     }
   }else{
     /* The node already retransmitted some times. Switch to use the second parent only */
     head->collect_message.retransmitted++;
-    runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[1], MAX_DATA_RETRANSMISSIONS);
-    printf("Collection forwoard: sensor sending [%02x:%02x - %d] to second parent [%02x:%2x]\n", conn->event_source.u8[0], conn->event_source.u8[1], conn->event_seqn, conn->tree_info.parents[1].u8[0], conn->tree_info.parents[1].u8[1]); 
+    ret2 = runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[1], MAX_DATA_RETRANSMISSIONS);
+    if (ret2 == 0){
+      ctimer_set(&data_retransmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_resend, conn);
+    }else{
+      printf("Collection forwoard: sensor sending [%02x:%02x - %d] of [%02x:%02x] to second parent [%02x:%2x]\n", head->collect_message.event_source.u8[0], head->collect_message.event_source.u8[1], head->collect_message.event_seqn, head->collect_message.s_data.sensor_addr.u8[0], head->collect_message.s_data.sensor_addr.u8[1], conn->tree_info.parents[1].u8[0], conn->tree_info.parents[1].u8[1]);
+    }
   }
-  /* Recursive call in case there are still messages to be delivered */
-  if(list_length(collect_to_send) + 1 > 2){
-    ctimer_set(&data_transmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_send, conn);
-  }
+
+  /* Scheduling recursive call */
+  ctimer_set(&data_transmission_timer, DATA_TRANSMIT_OFFSET, data_collection_send, conn);
 }
 
 void data_collection_uc_recv (struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
@@ -776,16 +781,24 @@ void sent_data_rc(struct runicast_conn *c, const linkaddr_t *to, uint8_t retrans
   printf("Collection message sent to %d.%d, retransmissions %d\n",
 	 to->u8[0], to->u8[1], retransmissions);
 
+  struct etc_conn* conn;
+  /* Get the pointer to the overall structure */
+  conn = (struct etc_conn*)(((uint8_t*)c) - 
+    offsetof(struct etc_conn, data_collection_conn));
+
   struct collect_msg_list_t* head;
   head = list_head(collect_to_send);
   if(head == NULL){
-    /* Empty list */
+    /* Empty list check*/
     return;
   }
 
   /* Collect message sent, remove it */ 
   list_pop(collect_to_send);
   memb_free(&collect_mem, head);
+
+  /* Call in case there are still messages to be delivered */
+  ctimer_set(&data_transmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_send, conn);
 }
 
 /**
@@ -820,13 +833,13 @@ static void data_collection_resend(void *ptr){
 
   head = list_head(collect_to_send);
   if(head == NULL){
-    /* Empty list */
+    /* Empty list check */
     printf("All collect messages resent\n");
     return;
   }
   head->collect_message.retransmitted++;
-  /* Recursive call to this function till all the collect messages are sent */
-  ctimer_set(&data_retransmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_send, conn);
+  /* Call in case there are still messages to be delivered */  
+  ctimer_set(&data_transmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_send, conn);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -873,7 +886,7 @@ void send_actuation_command(void* ptr){
     }
     printf("--COMMAND RESEND to [%02x:%02x]\n", downward_table_destinations[idx].u8[0], downward_table_destinations[idx].u8[1]);     
 
-  }else if(head->actuation_command.retransmitted == MAX_COMMAND_RETRANSMISSIONS){
+  }else if(head->actuation_command.retransmitted >= MAX_COMMAND_RETRANSMISSIONS){
     /* Max retransmission reached */
     printf("Max retransmission of command message\n");
     list_pop(commands_to_send);
@@ -884,13 +897,10 @@ void send_actuation_command(void* ptr){
   printf("Node actuation forwoard: sending [%02x:%02x - %d] to [%02x:%02x]\n", head->actuation_command.dest.u8[0], head->actuation_command.dest.u8[1], head->actuation_command.event_seqn, downward_table_destinations[idx].u8[0], downward_table_destinations[idx].u8[1]);
   if (ret == 0){
     printf("Node actuation forwoard: FAIL sending [%02x:%02x - %d] to [%02x:%02x]. Scheduling another attempt\n", head->actuation_command.dest.u8[0], head->actuation_command.dest.u8[1], head->actuation_command.event_seqn, downward_table_destinations[idx].u8[0], downward_table_destinations[idx].u8[1]);
+    printf("ACTUATION DEBUG %lu\n", ACTUATION_RETRANSMIT_OFFSET);
     ctimer_set(&actuation_retransmission_timer, ACTUATION_RETRANSMIT_OFFSET, actuation_resend, conn);
+    return;
   }
-
-  /* Recursive call to this function till all the commands are sent */
-  if(list_length(commands_to_send) + 1 > 2)
-    ctimer_set(&actuation_multiple_send_timer, ACTUATION_MULTIPLE_SEND_OFFSET, send_actuation_command, conn);
-  return;
 }
 
 /**
@@ -984,6 +994,14 @@ void actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
     /* Print debug */
     printf("--COMMAND opportunistic: reception of command for event [%02x:%02x - %d] to [%02x:%02x]\n", command_msg.event_source.u8[0], command_msg.event_source.u8[1], command_msg.event_seqn ,command_msg.dest.u8[0], command_msg.dest.u8[1]);
 
+
+    /* Is this event already managed? Simple duplicate filter */
+    if((last_opportunistic_actuation_command.event_seqn == command_msg.event_seqn) && (linkaddr_cmp(&last_opportunistic_actuation_command.event_source, &command_msg.event_source))
+      && (last_opportunistic_actuation_command.command == command_msg.command)){
+        printf("--COMMAND opportunistic: node already successfully managed [%02x:%02x - %d - CMD: [%d]]. Dropping...\n", command_msg.event_source.u8[0], command_msg.event_source.u8[1], command_msg.event_seqn, command_msg.command);
+        return;
+    }
+
     /* Has the destination been reached? */
     if(linkaddr_cmp(&command_msg.dest, &linkaddr_node_addr) == 0){
       /* Node is not the destination of the command, forwarding */
@@ -1002,21 +1020,13 @@ void actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
       memcpy(&opportunistic_actuation_command, packetbuf_dataptr(), sizeof(opportunistic_actuation_command));
       ctimer_set(&conn->actuation_opp_send_timer, ACTUATION_MULTIPLE_SEND_OFFSET, send_actuation_opportunistic, conn);
     }else{
-      
-      /* Is this event already managed? Simple duplicate filter */
-      if((last_opportunistic_actuation_command.event_seqn == command_msg.event_seqn) && (linkaddr_cmp(&last_opportunistic_actuation_command.event_source, &command_msg.event_source))
-         && (last_opportunistic_actuation_command.command == command_msg.command)){
-            printf("--COMMAND opportunistic: node already successfully managed [%02x:%02x - %d - CMD: [%d]]. Dropping...\n", command_msg.event_source.u8[0], command_msg.event_source.u8[1], command_msg.event_seqn, command_msg.command);
-            return;
-         }
 
       printf("--COMMAND opporunistic: sensor [%02x:%02x] reached\n", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1]);
       conn->callbacks->com_cb(&command_msg.event_source, command_msg.event_seqn, command_msg.command, command_msg.treshold);
-
-      /* Saving this command message as the last managed by the sensor */
-      memcpy(&last_opportunistic_actuation_command, &command_msg, sizeof(command_msg));
     }
 
+    /* Saving this command message as the last managed by the sensor */
+    memcpy(&last_opportunistic_actuation_command, &command_msg, sizeof(command_msg));
 }
 
 /**
@@ -1053,16 +1063,24 @@ void sent_actuation_rc(struct runicast_conn *c, const linkaddr_t *to, uint8_t re
   printf("--COMMAND message sent to %d.%d, retransmissions %d\n",
 	 to->u8[0], to->u8[1], retransmissions);
 
+  struct etc_conn* conn;
+  /* Get the pointer to the overall structure */
+  conn = (struct etc_conn*)(((uint8_t*)c) - 
+    offsetof(struct etc_conn, actuation_conn));
+
   struct command_msg_list_t* head;
   head = list_head(commands_to_send);
   if(head == NULL){
-    /* Empty list */
+    /* Empty list check */
     return;
   }
 
   /* Command message sent successfully, remove it */ 
   list_pop(commands_to_send);
   memb_free(&actuation_mem, head);
+
+  /* Schedule another attempt till there are actuation commands to be delivered */
+  ctimer_set(&actuation_retransmission_timer, ACTUATION_RETRANSMIT_OFFSET, send_actuation_command, conn);
 }
 
 
