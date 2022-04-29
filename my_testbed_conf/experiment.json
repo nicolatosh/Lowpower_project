@@ -1,0 +1,13 @@
+{
+    "name" : "LpIoT - Arpino",
+    "description" : "Nicola Arpino Lpiot project",
+    "start_time" : "asap",
+    "duration" : 600,
+    "binaries" : {
+      "hardware" : "firefly",
+      "bin_file" : "app.bin",
+      "targets" : "disi_povo2",
+      "programAddress": "0x00200000"
+    }
+  }
+  

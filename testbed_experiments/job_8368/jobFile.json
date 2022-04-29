@@ -1,0 +1,1 @@
+{"logs": 0, "test_id": 8368, "binaries": [{"targets": ["disi_povo2"], "programAddress": "0x00200000", "bin_file": "app.bin", "hardware": "firefly", "serialBaudrate": null}], "snapshot": false, "user": "nicola.arpino@studenti.unitn.it", "required": "all", "email": null, "name": "LpIoT - Arpino", "description": "Nicola Arpino Lpiot project", "start_time": "asap", "duration": 600}

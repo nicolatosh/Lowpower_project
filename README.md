@@ -31,3 +31,12 @@ Below there are the main steps protocol consist of:
 Evaluation based on reliability
 
 - PDR, Node duty-cycle, failure management
+
+---
+
+##### Aadditional info
+
+- my_testbed_conf: contains the `.json` file for the experiment
+- final_tests_cooja: files related to the final version of the project cooja tests
+- testbed_experiments: same as above but related to testbed
+
