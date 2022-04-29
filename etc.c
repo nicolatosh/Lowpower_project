@@ -252,7 +252,8 @@ etc_open(struct etc_conn* conn, uint16_t channels,
  * 
  * @param conn 
  */
-void etc_close(struct etc_conn *conn)
+void 
+etc_close(struct etc_conn *conn)
 {
   /* Turn off connections to ignore any incoming packet
    * and stop transmitting */
@@ -272,7 +273,8 @@ void etc_close(struct etc_conn *conn)
  * @param value the read value
  * @param threshold the limit the node has for the "stability"
  */
-void etc_update(uint32_t value, uint32_t threshold)
+void 
+etc_update(uint32_t value, uint32_t threshold)
 {
   /* Update local value and threshold, to be sent in case of event */
   sensor_event_data.value = value;
@@ -292,7 +294,8 @@ void etc_update(uint32_t value, uint32_t threshold)
  * @param threshold 
  * @return Returns 0 if new events are currently being suppressed.
  */
-int etc_trigger(struct etc_conn *conn, uint32_t value, uint32_t threshold)
+int 
+etc_trigger(struct etc_conn *conn, uint32_t value, uint32_t threshold)
 { 
   /* Check if node should suppress events */
   if(conn->suppress_internal_event){
@@ -328,7 +331,8 @@ int etc_trigger(struct etc_conn *conn, uint32_t value, uint32_t threshold)
  * @param threshold 
  * @return  Acutally is not checked by the app so returns 1 by default.
  */
-int etc_command(struct etc_conn *conn, const linkaddr_t *dest,
+int 
+etc_command(struct etc_conn *conn, const linkaddr_t *dest,
             command_type_t command, uint32_t threshold)
 {
   int delay;
@@ -362,7 +366,8 @@ int etc_command(struct etc_conn *conn, const linkaddr_t *dest,
  * 
  * @param ptr 
  */
-void tree_beacon_timer_cb(void* ptr)
+void 
+tree_beacon_timer_cb(void* ptr)
 {
   /* Common nodes and sink logic */
   struct etc_conn* conn = (struct etc_conn*)ptr;
@@ -382,7 +387,8 @@ void tree_beacon_timer_cb(void* ptr)
  * 
  * @param conn 
  */
-void send_beacon(struct etc_conn* conn)
+void 
+send_beacon(struct etc_conn* conn)
 {
   /* Prepare the beacon message */
   struct beacon_msg beacon = {
@@ -402,7 +408,8 @@ void send_beacon(struct etc_conn* conn)
  * @param bc_conn 
  * @param sender 
  */
-void tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
+void 
+tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
 {
   struct beacon_msg beacon;
   struct etc_conn* conn;
@@ -430,10 +437,10 @@ void tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
    * Update (if needed) the node's current routing info (parent, metric, beacon_seqn).
    */
   if (rssi < RSSI_THRESHOLD || beacon.seqn < conn->tree_info.beacon_seqn)
-    return; // The beacon is either too weak or too old, ignore it
-  if (beacon.seqn == conn->tree_info.beacon_seqn) { // The beacon is not new, check the metric
+    return; /* The beacon is either too weak or too old, ignore it */
+  if (beacon.seqn == conn->tree_info.beacon_seqn) { /* The beacon is not new, check the metric */
     int parent_to_update = -1;
-    // Is the beacon proposed parent better? 
+    /* Is the beacon proposed parent better? */
     if ((((beacon.metric + 1 < conn->tree_info.metric) && (rssi >= conn->tree_info.rssi[0]))
         || ((beacon.metric + 1 <= conn->tree_info.metric) && (rssi > conn->tree_info.rssi[0])))
          && (linkaddr_cmp(&conn->tree_info.parents[0], sender) == 0)){
@@ -441,7 +448,7 @@ void tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
     }else if ((((beacon.metric + 1 < conn->tree_info.metric) && (rssi >= conn->tree_info.rssi[1]))
         || ((beacon.metric+1 <= conn->tree_info.metric) && (rssi > conn->tree_info.rssi[1])))
         && linkaddr_cmp(&conn->tree_info.parents[1], sender) == 0){
-      // Is the proposted parent better than the reserve choice? 
+      /* Is the proposted parent better than the reserve choice? */
       parent_to_update = 1;
     }else{
 
@@ -456,7 +463,7 @@ void tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
         }
       if(parent_to_update == -1){
         printf("Tree building: Nothing to do\n");
-        return; // Ignore beacon. Parent_to_update is -1.
+        return; /* Ignore beacon. Parent_to_update is -1. */
       }
     }
 
@@ -464,11 +471,11 @@ void tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
      *  the second choice 
      */
     if(parent_to_update == 0){
-      // Second candidate update with the first one values
+      /* Second candidate update with the first one values */
       linkaddr_copy(&conn->tree_info.parents[1], &conn->tree_info.parents[0]);
       conn->tree_info.rssi[1] = conn->tree_info.rssi[0];
 
-      // Updating first candidate
+      /* Updating first candidate */
       linkaddr_copy(&conn->tree_info.parents[0], sender);
       conn->tree_info.metric = beacon.metric + 1;
       conn->tree_info.rssi[0] = rssi;
@@ -495,7 +502,7 @@ void tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
       conn->tree_info.rssi[1] = conn->tree_info.rssi[0];
     }
     
-    // Update the first candidate
+    /* Update the first candidate */
     linkaddr_copy(&conn->tree_info.parents[0], sender);
     conn->tree_info.metric = beacon.metric + 1;
     conn->tree_info.beacon_seqn = beacon.seqn;
@@ -515,7 +522,8 @@ void tree_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender)
  * 
  * @param ptr 
  */
-void node_internal_event_cb(void *ptr){
+void 
+node_internal_event_cb(void *ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr; 
   conn->suppress_internal_event = false;
 };
@@ -525,7 +533,8 @@ void node_internal_event_cb(void *ptr){
  * 
  * @param ptr 
  */
-void node_propagation_event_cb(void * ptr){
+void 
+node_propagation_event_cb(void * ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr; 
   conn->suppress_propagation = false;
 }
@@ -535,7 +544,8 @@ void node_propagation_event_cb(void * ptr){
  *        the caller to send the collect message after a while.
  * @param ptr 
  */
-void send_event_delayed(void* ptr){
+void 
+send_event_delayed(void* ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr; 
 
   /* Sending event */
@@ -550,7 +560,8 @@ void send_event_delayed(void* ptr){
  * 
  * @param conn 
  */
-void send_event(void* ptr){
+void 
+send_event(void* ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr;
   struct event_msg_t event_message = {.event_seqn = conn->event_seqn, .event_source = conn->event_source};
   packetbuf_clear();
@@ -565,7 +576,8 @@ void send_event(void* ptr){
  * @param bc_conn 
  * @param sender 
  */
-void event_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender){
+void 
+event_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender){
 
   struct etc_conn* conn;
   struct event_msg_t event;
@@ -620,7 +632,8 @@ void event_bc_recv(struct broadcast_conn *bc_conn, const linkaddr_t *sender){
  * @param status 
  * @param num_tx 
  */
-void event_bc_sent(struct broadcast_conn *bc_conn, int status, int num_tx){
+void 
+event_bc_sent(struct broadcast_conn *bc_conn, int status, int num_tx){
   struct etc_conn* conn;
   /* Get the pointer to the overall structure etc_conn from its field bc */
   conn = (struct etc_conn*)(((uint8_t*)bc_conn) - 
@@ -643,7 +656,8 @@ void event_bc_sent(struct broadcast_conn *bc_conn, int status, int num_tx){
  *        to be delivered. See "List collect_to_send"
  * @param ptr 
  */
-void data_collection_trigger(void* ptr)
+void 
+data_collection_trigger(void* ptr)
 {
   struct etc_conn* conn = (struct etc_conn*)ptr; 
   if((conn->node_role == NODE_ROLE_FORWARDER) || (conn->node_role == NODE_ROLE_CONTROLLER)){
@@ -675,35 +689,36 @@ void data_collection_trigger(void* ptr)
  * 
  * @param ptr casted to etc_conn
  */
-void data_collection_send(void* ptr){
+void 
+data_collection_send(void* ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr;
   struct collect_msg_list_t* head;
   int ret, ret2;
   bool try_second_parent = false;
 
-  // Pick a collect message to be sent 
+  /* Pick a collect message to be sent */
   head = list_head(collect_to_send);
   if(head == NULL){
     printf("All collect messages sent by this node\n");
     return;
   }
 
-  // Check best parent 
+  /* Check best parent */
   if (linkaddr_cmp(&conn->tree_info.parents[0], &linkaddr_null))
-    // The node is still disconnected 
+    /* The node is still disconnected */
     return; 
 
   packetbuf_clear();
   packetbuf_copyfrom(&head->collect_message, sizeof(head->collect_message));
 
-  // Has the collect message been already retransmitted by this node? 
+  /* Has the collect message been already retransmitted by this node? */
   if(head->collect_message.retransmitted > 0 && head->collect_message.retransmitted < MAX_DATA_RETRANSMISSIONS){
     printf("Collection RESEND [%02x:%02x - %d] of [%02x:%02x]\n", head->collect_message.event_source.u8[0], head->collect_message.event_source.u8[1], head->collect_message.event_seqn, head->collect_message.s_data.sensor_addr.u8[0], head->collect_message.s_data.sensor_addr.u8[1]);
     if(head->collect_message.retransmitted >= (MAX_DATA_RETRANSMISSIONS/2)){
       try_second_parent = true;
     }
   }else if(head->collect_message.retransmitted >= MAX_DATA_RETRANSMISSIONS){
-    // Max number of retransmissions reached 
+    /* Max number of retransmissions reached */
     printf("Max retransmissions\n");
     list_pop(collect_to_send);
     memb_free(&collect_mem, head);
@@ -717,7 +732,7 @@ void data_collection_send(void* ptr){
     if (ret == 0){
       ret = runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[1], MAX_DATA_RETRANSMISSIONS); 
       if(ret == 0){
-        // Both send couldn't start. Scheduling retransmission 
+        /* Both send couldn't start. Scheduling retransmission */
         printf("Data collection failed to start from this node. Other attempts later\n");
         ctimer_set(&data_retransmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_resend, conn);
         return;
@@ -728,7 +743,7 @@ void data_collection_send(void* ptr){
       printf("Collection forwoard: sensor sending [%02x:%02x - %d] of [%02x:%02x] to first parent [%02x:%02x]\n", head->collect_message.event_source.u8[0], head->collect_message.event_source.u8[1], head->collect_message.event_seqn, head->collect_message.s_data.sensor_addr.u8[0], head->collect_message.s_data.sensor_addr.u8[1], conn->tree_info.parents[0].u8[0], conn->tree_info.parents[0].u8[1]);
     }
   }else{
-    // The node already retransmitted some times. Switch to use the second parent only 
+    /* The node already retransmitted some times. Switch to use the second parent only */
     head->collect_message.retransmitted++;
     ret2 = runicast_send(&conn->data_collection_conn, &conn->tree_info.parents[1], MAX_DATA_RETRANSMISSIONS);
     if (ret2 == 0){
@@ -752,7 +767,8 @@ void data_collection_send(void* ptr){
  * @param from 
  * @param seqno 
  */
-void data_collection_uc_recv (struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
+void
+data_collection_uc_recv (struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 {
   int idx = 0;
   struct etc_conn * conn;
@@ -784,15 +800,15 @@ void data_collection_uc_recv (struct runicast_conn *c, const linkaddr_t *from, u
   }
   printf("Collection packet [%02x:%02x - %d] of [%02x:%02x] received from [%02x:%02x]\n", collect_msg.event_source.u8[0], collect_msg.event_source.u8[1], collect_msg.event_seqn, collect_msg.s_data.sensor_addr.u8[0], collect_msg.s_data.sensor_addr.u8[1], from->u8[0], from->u8[1]);
 
-  // Simple duplicate filter
+  /* Simple duplicate filter */
   if((last_collect.event_seqn == collect_msg.event_seqn) && linkaddr_cmp(&last_collect.event_source, &collect_msg.event_source)
     && linkaddr_cmp(&last_collect.s_data.sensor_addr, &collect_msg.s_data.sensor_addr)){
-      // Node already managed such message 
+      /* Node already managed such message */
       printf("Node already managed collect [%02x:%02x - %d] of [%02x:%02x]\n", collect_msg.event_source.u8[0], collect_msg.event_source.u8[1], collect_msg.event_seqn, collect_msg.s_data.sensor_addr.u8[0], collect_msg.s_data.sensor_addr.u8[1]);
       return;
     }
 
-  // Updating downward routing table 
+  /* Updating downward routing table */
   while(linkaddr_cmp(&downward_table_sources[idx], &collect_msg.s_data.sensor_addr) == 0){idx++;}
   linkaddr_copy(&downward_table_destinations[idx], from);
 
@@ -800,7 +816,7 @@ void data_collection_uc_recv (struct runicast_conn *c, const linkaddr_t *from, u
         downward_table_sources[idx].u8[0], downward_table_sources[idx].u8[1], 
         from->u8[0], from->u8[1]);
 
-  // This node saves externally the last collect message received 
+  /* This node saves externally the last collect message received */
   memcpy(&last_collect, &collect_msg, sizeof(collect_msg));
 
   /* The destination has been reached, no more forwarding is needed.
@@ -839,27 +855,28 @@ void data_collection_uc_recv (struct runicast_conn *c, const linkaddr_t *from, u
  * @param to 
  * @param retransmissions 
  */
-void sent_data_rc(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions){
+void 
+sent_data_rc(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions){
   printf("Collection message sent to %d.%d, retransmissions %d\n",
 	 to->u8[0], to->u8[1], retransmissions);
 
   struct etc_conn* conn;
-  // Get the pointer to the overall structure 
+  /* Get the pointer to the overall structure */
   conn = (struct etc_conn*)(((uint8_t*)c) - 
     offsetof(struct etc_conn, data_collection_conn));
 
   struct collect_msg_list_t* head;
   head = list_head(collect_to_send);
   if(head == NULL){
-    // Empty list check
+    /* Empty list check */
     return;
   }
 
-  // Collect message sent, remove it 
+  /* Collect message sent, remove it */
   list_pop(collect_to_send);
   memb_free(&collect_mem, head);
 
-  // Call in case there are still messages to be delivered 
+  /* Call in case there are still messages to be delivered */
   ctimer_set(&data_transmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_send, conn);
 }
 
@@ -870,16 +887,17 @@ void sent_data_rc(struct runicast_conn *c, const linkaddr_t *to, uint8_t retrans
  * @param to 
  * @param retransmissions 
  */
-void sent_data_timedout(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions){
+void 
+sent_data_timedout(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions){
   printf("Collection FAIL: timed out when sending to %d.%d, retransmissions %d\n",
     to->u8[0], to->u8[1], retransmissions);
   
   struct etc_conn* conn;
-  // Get the pointer to the overall structure 
+  /* Get the pointer to the overall structure */
   conn = (struct etc_conn*)(((uint8_t*)c) - 
     offsetof(struct etc_conn, data_collection_conn));
 
-  // Schedule another attempt
+  /* Schedule another attempt */
   ctimer_set(&data_retransmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_resend, conn);
 }
 
@@ -889,18 +907,19 @@ void sent_data_timedout(struct runicast_conn *c, const linkaddr_t *to, uint8_t r
  * 
  * @param ptr casted to etc_conn
  */
-static void data_collection_resend(void *ptr){
+static void 
+data_collection_resend(void *ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr;
   struct collect_msg_list_t* head;
 
   head = list_head(collect_to_send);
   if(head == NULL){
-    // Empty list check 
+    /* Empty list check */
     printf("All collect messages resent\n");
     return;
   }
   head->collect_message.retransmitted++;
-  // Call in case there are still messages to be delivered 
+  /* Call in case there are still messages to be delivered */
   ctimer_set(&data_transmission_timer, DATA_RETRANSMIT_OFFSET, data_collection_send, conn);
 }
 
@@ -914,26 +933,27 @@ static void data_collection_resend(void *ptr){
  * 
  * @param ptr casted to "etc_conn"
  */
-void send_actuation_command(void* ptr){
+void 
+send_actuation_command(void* ptr){
   struct etc_conn *conn = (struct etc_conn*) ptr;
   struct command_msg_list_t *head;
   int ret;
   int idx;
   
-  // Pick a command message from the commands to be delivered list 
+  /* Pick a command message from the commands to be delivered list */
   head = list_head(commands_to_send);
   if(head == NULL){
-    // Empty list check 
+    /* Empty list check */
     printf("All actuation commands sent\n");
     return;
   }
 
-  // There is a command message to be sent 
+  /* There is a command message to be sent */
   packetbuf_clear();
   packetbuf_copyfrom(&head->actuation_command, sizeof(head->actuation_command));
   idx = find_sensor_index(&head->actuation_command.dest);
   
-  // Has the command message already been retransmitted by this node? 
+  /* Has the command message already been retransmitted by this node? */
   if(head->actuation_command.retransmitted >0 && head->actuation_command.retransmitted < MAX_COMMAND_RETRANSMISSIONS){
     /* Since the runicast primitive failed to send to the parent of downward_table
      * the resend mechanism, after some attemps, is the Opportunistic forwarding
@@ -947,7 +967,7 @@ void send_actuation_command(void* ptr){
     printf("--COMMAND RESEND to [%02x:%02x]\n", downward_table_destinations[idx].u8[0], downward_table_destinations[idx].u8[1]);     
 
   }else if(head->actuation_command.retransmitted >= MAX_COMMAND_RETRANSMISSIONS){
-    // Max retransmission reached, stop sending such message
+    /* Max retransmission reached, stop sending such message */
     printf("Max retransmission of command message\n");
     list_pop(commands_to_send);
     memb_free(&actuation_mem, head);
@@ -971,16 +991,17 @@ void send_actuation_command(void* ptr){
  * @param uc_conn 
  * @param from 
  */
-void actuation_command_uc_recv(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno){
+void 
+actuation_command_uc_recv(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno){
   struct etc_conn *conn;
   struct command_msg_t command_msg;
   struct command_msg_list_t* command_element;
 
-  // Get the pointer to the overall structure etc_conn from actuation_conn 
+  /* Get the pointer to the overall structure etc_conn from actuation_conn */
   conn = (struct etc_conn*)(((uint8_t*)c) - 
     offsetof(struct etc_conn, actuation_conn));
 
-  // Check if the received unicast message looks legitimate 
+  /* Check if the received unicast message looks legitimate */
   if (packetbuf_datalen() < sizeof(struct command_msg_t)) {
     printf("--COMMAND: too short unicast packet %d\n", packetbuf_datalen());
     return;
@@ -988,7 +1009,7 @@ void actuation_command_uc_recv(struct runicast_conn *c, const linkaddr_t *from, 
   memcpy(&command_msg, packetbuf_dataptr(), sizeof(command_msg));
 
   printf("CONN: %d, message %d\n", conn->event_seqn, command_msg.event_seqn);
-  // Making sure node agrees with the vision of the controller 
+  /* Making sure node agrees with the vision of the controller */
   conn->event_seqn = command_msg.event_seqn;
   linkaddr_copy(&conn->event_source, &command_msg.event_source);
 
@@ -999,7 +1020,7 @@ void actuation_command_uc_recv(struct runicast_conn *c, const linkaddr_t *from, 
    * be triggered again because the sender did not receive ack.
    */
   if(last_actuation_command.event_seqn != command_msg.event_seqn || !linkaddr_cmp(&last_actuation_command.event_source, &command_msg.event_source) || !(linkaddr_cmp(&last_actuation_command.dest, &command_msg.dest))){
-    // Check if the node is the destination 
+    /* Check if the node is the destination */
     if(linkaddr_cmp(&command_msg.dest, &linkaddr_node_addr) == 0){
       
       if(check_command_message_queue(&command_msg)){
@@ -1009,11 +1030,11 @@ void actuation_command_uc_recv(struct runicast_conn *c, const linkaddr_t *from, 
       command_element = memb_alloc(&actuation_mem);
       command_element->actuation_command = command_msg;
 
-      // Add the command to the list of commands to be sent 
+      /* Add the command to the list of commands to be sent */
       list_add(commands_to_send, command_element);
       ctimer_set(&actuation_multiple_send_timer, ACTUATION_MULTIPLE_SEND_OFFSET, send_actuation_command, conn);
     }else{
-      // This is the final destination. Com_cb is called 
+      /* This is the final destination. Com_cb is called */
       printf("--COMMAND sensor [%02x:%02x] reached\n", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1]);
       conn->callbacks->com_cb(&command_msg.event_source, command_msg.event_seqn, command_msg.command, command_msg.treshold);
       
@@ -1035,15 +1056,16 @@ void actuation_command_uc_recv(struct runicast_conn *c, const linkaddr_t *from, 
  * @param c 
  * @param sender 
  */
-void actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
+void 
+actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
     struct etc_conn *conn;
     struct command_msg_t command_msg;
 
-    // Get the pointer to the overall structure etc_conn from actuation_opportunistic_conn 
+    /* Get the pointer to the overall structure etc_conn from actuation_opportunistic_conn */
     conn = (struct etc_conn*)(((uint8_t*)c) - 
       offsetof(struct etc_conn, actuation_opportunistic_conn));
 
-    // Check if the received message looks legitimate 
+    /* Check if the received message looks legitimate */
     if (packetbuf_datalen() < sizeof(struct command_msg_t)) {
       printf("--COMMAND opportunistic: too short packet %d\n", packetbuf_datalen());
       return;
@@ -1051,14 +1073,14 @@ void actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
     memcpy(&command_msg, packetbuf_dataptr(), sizeof(command_msg));
     printf("--COMMAND opportunistic: reception of command for event [%02x:%02x - %d] to [%02x:%02x]\n", command_msg.event_source.u8[0], command_msg.event_source.u8[1], command_msg.event_seqn ,command_msg.dest.u8[0], command_msg.dest.u8[1]);
 
-    // Is this event already managed? Simple duplicate filter 
+    /* Is this event already managed? Simple duplicate filter */
     if((last_opportunistic_actuation_command.event_seqn == command_msg.event_seqn) && (linkaddr_cmp(&last_opportunistic_actuation_command.event_source, &command_msg.event_source))
       && (last_opportunistic_actuation_command.command == command_msg.command)){
         printf("--COMMAND opportunistic: node already successfully managed [%02x:%02x - %d - CMD: [%d]]. Dropping...\n", command_msg.event_source.u8[0], command_msg.event_source.u8[1], command_msg.event_seqn, command_msg.command);
         return;
     }
 
-    // Has the destination been reached? 
+    /* Has the destination been reached? */
     if(linkaddr_cmp(&command_msg.dest, &linkaddr_node_addr) == 0){
       /* Node is not the destination of the command, forwarding 
        * Check for suppression of commands */ 
@@ -1067,18 +1089,18 @@ void actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
         return;
       }
 
-      // Enable suppressing of commands 
+      /* Enable suppressing of commands */
       ctimer_set(&actuation_opp_suppress_timer, ACTUATION_OPPORTUNISTIC_OFFSET, opportunistic_timer_cb, conn);
       conn->suppress_opportunistic = true;
 
-      // Scheduling the send
+      /* Scheduling the send */
       memcpy(&opportunistic_actuation_command, packetbuf_dataptr(), sizeof(opportunistic_actuation_command));
       ctimer_set(&conn->actuation_opp_send_timer, ACTUATION_MULTIPLE_SEND_OFFSET, send_actuation_opportunistic, conn);
     }else{
       printf("--COMMAND opporunistic: sensor [%02x:%02x] reached\n", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1]);
       conn->callbacks->com_cb(&command_msg.event_source, command_msg.event_seqn, command_msg.command, command_msg.treshold);
     }
-    // Saving this command message as the last managed by the sensor 
+    /* Saving this command message as the last managed by the sensor */
     memcpy(&last_opportunistic_actuation_command, &command_msg, sizeof(command_msg));
 }
 
@@ -1087,7 +1109,8 @@ void actuation_opp_bc_recv(struct broadcast_conn *c, const linkaddr_t *sender){
  * 
  * @param ptr casted to etc_conn
  */
-void send_actuation_opportunistic(void *ptr){
+void 
+send_actuation_opportunistic(void *ptr){
   struct etc_conn *conn = (struct etc_conn*) ptr;
   packetbuf_clear();
   packetbuf_copyfrom(&opportunistic_actuation_command, sizeof(opportunistic_actuation_command));
@@ -1100,7 +1123,8 @@ void send_actuation_opportunistic(void *ptr){
  * 
  * @param ptr 
  */
-void opportunistic_timer_cb(void *ptr){
+void 
+opportunistic_timer_cb(void *ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr; 
   conn->suppress_opportunistic = false;
 };
@@ -1112,27 +1136,28 @@ void opportunistic_timer_cb(void *ptr){
  * @param to 
  * @param retransmissions 
  */
-void sent_actuation_rc(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions){
+void 
+sent_actuation_rc(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions){
   printf("--COMMAND message sent to %d.%d, retransmissions %d\n",
 	 to->u8[0], to->u8[1], retransmissions);
 
   struct etc_conn* conn;
-  // Get the pointer to the overall structure 
+  /* Get the pointer to the overall structure */
   conn = (struct etc_conn*)(((uint8_t*)c) - 
     offsetof(struct etc_conn, actuation_conn));
 
   struct command_msg_list_t* head;
   head = list_head(commands_to_send);
   if(head == NULL){
-    // Empty list check 
+    /* Empty list check */
     return;
   }
 
-  // Command message sent successfully, remove it 
+  /* Command message sent successfully, remove it */
   list_pop(commands_to_send);
   memb_free(&actuation_mem, head);
 
-  // Schedule another attempt till there are actuation commands to be delivered 
+  /* Schedule another attempt till there are actuation commands to be delivered */
   ctimer_set(&actuation_retransmission_timer, ACTUATION_RETRANSMIT_OFFSET, send_actuation_command, conn);
 }
 
@@ -1144,7 +1169,8 @@ void sent_actuation_rc(struct runicast_conn *c, const linkaddr_t *to, uint8_t re
  * @param to 
  * @param retransmissions 
  */
-void sent_actuation_timedout(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions){
+void 
+sent_actuation_timedout(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions){
   printf("--COMMAND FAIL: timed out when sending to [%02x:%02x - %d], retransmissions %d\n",
         to->u8[0], to->u8[1], last_actuation_command.event_seqn, retransmissions);
 
@@ -1162,13 +1188,14 @@ void sent_actuation_timedout(struct runicast_conn *c, const linkaddr_t *to, uint
  * 
  * @param ptr casted to etc_conn
  */
-void actuation_resend(void *ptr){
+void 
+actuation_resend(void *ptr){
   struct etc_conn* conn = (struct etc_conn*)ptr;
   struct command_msg_list_t* head;
 
   head = list_head(commands_to_send);
   if(head == NULL){
-    // Empty list check 
+    /* Empty list check */
     return;
   }
   head->actuation_command.retransmitted++;
@@ -1186,7 +1213,8 @@ void actuation_resend(void *ptr){
  * @param source 
  * @return int 
  */
-int find_sensor_index(const linkaddr_t *source){
+int 
+find_sensor_index(const linkaddr_t *source){
   int idx = 0;
   while(linkaddr_cmp(source, &downward_table_sources[idx]) == 0){idx++;}
   return idx;
@@ -1217,7 +1245,8 @@ bool check_collect_message_queue(struct collect_msg_t* message){
  * @return true 
  * @return false 
  */
-bool check_command_message_queue(struct command_msg_t* message){
+bool 
+check_command_message_queue(struct command_msg_t* message){
   struct command_msg_list_t * head;
   for(head = list_head(commands_to_send); head != NULL; head = list_item_next(head)) {
     if(linkaddr_cmp(&head->actuation_command.event_source, &message->event_source)
