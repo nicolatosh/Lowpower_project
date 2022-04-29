@@ -41,19 +41,22 @@ struct etc_callbacks {
 };
 /*---------------------------------------------------------------------------*/
 /* Data structures for tree management */
+
+/* Tree piece of information at each node */
 struct tree_data {
   linkaddr_t parents[2];
   int rssi[2];
   uint16_t metric;
   int beacon_seqn;
   struct ctimer beacon_timer;
-}__attribute__ ((__packed__));
+};
 
+/* Sensor data payload */
 struct sensor_data {
   uint32_t value;
   uint32_t threshold;
   linkaddr_t sensor_addr;
-}__attribute__ ((__packed__));
+};
 
 /* Connection object */
 struct etc_conn {
@@ -75,8 +78,8 @@ struct etc_conn {
   struct ctimer suppression_prop_timer; // used to temporarily stop the propagation of events from other nodes
   struct ctimer event_prop_timer; // used to send event message after delay
   struct ctimer datacollection_timer; // used to schedule sensor data collection callback
-  struct ctimer actuation_timer;
-  struct ctimer actuation_opp_send_timer;
+  struct ctimer actuation_timer; // used to schedule the sending of command messages
+  struct ctimer actuation_opp_send_timer; // used to start the broadcast forwarding of command messages
 
   /* Role (controller, forwarder, sensor/actuator) */
   node_role_t node_role;
@@ -85,11 +88,11 @@ struct etc_conn {
    * useful to match logs of the control loop till actuation */
   linkaddr_t event_source;
   uint16_t event_seqn;
+
+  /* Flag conditions */
   bool suppress_internal_event;
   bool suppress_propagation;
-
-  /* Used to enable/disable opportunistic fowarding */
-  bool suppress_opportunistic;
+  bool suppress_opportunistic; // enable/disable opportunistic fowarding of commands 
 };
 /*---------------------------------------------------------------------------*/
 /* Initialize a ETC connection 

@@ -28,7 +28,7 @@
  * of event detection of the system. In the final report, please REMEMBER to
  * mention how you defined such variables for each experiment! */
 #define SENSOR_UPDATE_INTERVAL      (CLOCK_SECOND * 7)
-#define SENSOR_UPDATE_INCREMENT     (random_rand() % 300) 
+#define SENSOR_UPDATE_INCREMENT     (random_rand() % 300)
 #define SENSOR_STARTING_VALUE_STEP  (1000)
 #define CONTROLLER_MAX_DIFF         (10000)
 #define CONTROLLER_MAX_THRESHOLD    (50000)
@@ -100,7 +100,7 @@ struct current_event{
   linkaddr_t addr;
   int16_t seqn;
 };
-struct current_event current_managed_event;
+static struct current_event current_managed_event;
 static struct ctimer datacollection_timer;
 /*---------------------------------------------------------------------------*/
 /* Application */
